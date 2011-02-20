@@ -64,8 +64,12 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
    protected Session createSession() {
       Properties properties = new Properties();
       properties.setProperty("mail.transport.protocol", "aws");
-      properties.setProperty("mail.aws.user", getAWSAccessKeyId());
-      properties.setProperty("mail.aws.password", getAWSSecretKey());
+      if(getAWSAccessKeyId() != null) {
+         properties.setProperty("mail.aws.user", getAWSAccessKeyId());
+      }
+      if(getAWSSecretKey() != null) {
+         properties.setProperty("mail.aws.password", getAWSSecretKey());
+      }
       return Session.getInstance(properties);
    }
 
@@ -231,16 +235,22 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
     * boolean value <code>false</code> is returned.
     */
    protected boolean checkEntryConditions() {
+      if(this.accessKeyId == null) {
+         errorHandler.error("No AWS AccessKeyId is configured.");
+         return false;
+      }
+      if(this.secretKey == null) {
+         errorHandler.error("No AWS SecretKey is configured.");
+         return false;
+      }
       if(this.message == null) {
          errorHandler.error("Message object not configured.");
          return false;
       }
-
       if(this.evaluator == null) {
          errorHandler.error("No TriggeringEventEvaluator is set for appender [" + name + "].");
          return false;
       }
-
       if(this.layout == null) {
          errorHandler.error("No layout set for appender named [" + name + "].");
          return false;
