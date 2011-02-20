@@ -1,4 +1,4 @@
-package com.jl.logging.appenders.aws;
+package com.github.jlewallen.logging.appenders.aws;
 
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
