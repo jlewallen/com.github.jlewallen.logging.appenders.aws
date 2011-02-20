@@ -36,7 +36,7 @@ import com.amazonaws.services.simpleemail.AWSJavaMailTransport;
 
 public class AmazonSESAppender extends AppenderSkeleton implements AWSCredentials {
 
-   private short bufferSize = 512;
+   private int bufferSize = 512;
    private CyclicBuffer cyclicBuffer = new CyclicBuffer(bufferSize);
    private Message message;
    private Transport transport;
@@ -366,7 +366,7 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
    /**
     * Returns value of the <b>BufferSize</b> option.
     */
-   public short getBufferSize() {
+   public int getBufferSize() {
       return bufferSize;
    }
 
@@ -375,7 +375,7 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
     * in a cyclic buffer. When the <code>BufferSize</code> is reached, oldest events are deleted as new events are added
     * to the buffer. By default the size of the cyclic buffer is 512 events.
     */
-   public void setBufferSize(short bufferSize) {
+   public void setBufferSize(int bufferSize) {
       this.bufferSize = bufferSize;
       cyclicBuffer.resize(bufferSize);
    }
