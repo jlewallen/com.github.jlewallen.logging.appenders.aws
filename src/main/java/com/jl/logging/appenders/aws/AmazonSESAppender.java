@@ -23,6 +23,7 @@ import javax.mail.internet.MimeUtility;
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.Layout;
 import org.apache.log4j.Level;
+import org.apache.log4j.PatternLayout;
 import org.apache.log4j.helpers.CyclicBuffer;
 import org.apache.log4j.helpers.LogLog;
 import org.apache.log4j.helpers.OptionConverter;
@@ -155,31 +156,48 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
       }
    }
 
-   protected String formatBody() {
+   static class BodyAndSubject {
+      public String body;
+      public String subject;
+   }
+
+   protected BodyAndSubject formatBodyAndSubject() throws UnsupportedEncodingException {
       // Note: this code already owns the monitor for this
       // appender. This frees us from needing to synchronize on 'cb'.
+      BodyAndSubject bodyAndSubject = new BodyAndSubject();
       StringBuffer sbuf = new StringBuffer();
-      String t = layout.getHeader();
-      if(t != null) sbuf.append(t);
-      int len = cyclicBuffer.length();
-      for(int i = 0; i < len; i++) {
+      String header = layout.getHeader();
+      if(header != null) {
+         sbuf.append(header);
+      }
+      int length = cyclicBuffer.length();
+      for(int i = 0; i < length; i++) {
          LoggingEvent event = cyclicBuffer.get();
          sbuf.append(layout.format(event));
          if(layout.ignoresThrowable()) {
-            String[] s = event.getThrowableStrRep();
-            if(s != null) {
-               for(int j = 0; j < s.length; j++) {
-                  sbuf.append(s[j]);
+            String[] throwable = event.getThrowableStrRep();
+            if(throwable != null) {
+               for(int j = 0; j < throwable.length; j++) {
+                  sbuf.append(throwable[j]);
                   sbuf.append(Layout.LINE_SEP);
                }
             }
          }
+         if((i == length - 1 || event.getThrowableInformation() != null) && bodyAndSubject.subject == null) {
+            Layout subjectLayout = new PatternLayout(getSubject());
+            bodyAndSubject.subject = MimeUtility.encodeText(subjectLayout.format(event), "UTF-8", null);
+         }
       }
-      t = layout.getFooter();
-      if(t != null) {
-         sbuf.append(t);
+      String footer = layout.getFooter();
+      if(footer != null) {
+         sbuf.append(footer);
       }
-      return sbuf.toString();
+      if(bodyAndSubject.subject == null) {
+         bodyAndSubject.subject = getSubject();
+
+      }
+      bodyAndSubject.body = sbuf.toString();
+      return bodyAndSubject;
    }
 
    /**
@@ -187,21 +205,22 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
     */
    protected void sendBuffer() {
       try {
-         String s = formatBody();
+         BodyAndSubject bodyAndSubject = formatBodyAndSubject();
+         String body = bodyAndSubject.body;
          boolean allAscii = true;
-         for(int i = 0; i < s.length() && allAscii; i++) {
-            allAscii = s.charAt(i) <= 0x7F;
+         for(int i = 0; i < body.length() && allAscii; i++) {
+            allAscii = body.charAt(i) <= 0x7F;
          }
          MimeBodyPart part;
          if(allAscii) {
             part = new MimeBodyPart();
-            part.setContent(s, layout.getContentType());
+            part.setContent(body, layout.getContentType());
          }
          else {
             try {
                ByteArrayOutputStream os = new ByteArrayOutputStream();
                Writer writer = new OutputStreamWriter(MimeUtility.encode(os, "quoted-printable"), "UTF-8");
-               writer.write(s);
+               writer.write(body);
                writer.close();
                InternetHeaders headers = new InternetHeaders();
                headers.setHeader("Content-Type", layout.getContentType() + "; charset=UTF-8");
@@ -209,7 +228,7 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
                part = new MimeBodyPart(headers, os.toByteArray());
             }
             catch(Exception ex) {
-               StringBuffer sbuf = new StringBuffer(s);
+               StringBuffer sbuf = new StringBuffer(body);
                for(int i = 0; i < sbuf.length(); i++) {
                   if(sbuf.charAt(i) >= 0x80) {
                      sbuf.setCharAt(i, '?');
@@ -220,9 +239,10 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
             }
          }
 
-         Multipart mp = new MimeMultipart();
-         mp.addBodyPart(part);
-         message.setContent(mp);
+         Multipart multipart = new MimeMultipart();
+         multipart.addBodyPart(part);
+         message.setSubject(bodyAndSubject.subject);
+         message.setContent(multipart);
          message.setSentDate(new Date());
 
          if(!transport.isConnected()) {
@@ -235,6 +255,9 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
          LogLog.error("Error occured while sending e-mail notification.", e);
       }
       catch(RuntimeException e) {
+         LogLog.error("Error occured while sending e-mail notification.", e);
+      }
+      catch(UnsupportedEncodingException e) {
          LogLog.error("Error occured while sending e-mail notification.", e);
       }
    }
