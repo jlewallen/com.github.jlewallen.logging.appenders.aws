@@ -1,4 +1,4 @@
-package com.jl.com.jl.logging.appenders.aws;
+package com.jl.logging.appenders.aws;
 
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
