@@ -30,11 +30,13 @@ import org.apache.log4j.spi.ErrorCode;
 import org.apache.log4j.spi.LoggingEvent;
 import org.apache.log4j.spi.OptionHandler;
 import org.apache.log4j.spi.TriggeringEventEvaluator;
+import org.apache.log4j.xml.UnrecognizedElementHandler;
+import org.w3c.dom.Element;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.services.simpleemail.AWSJavaMailTransport;
 
-public class AmazonSESAppender extends AppenderSkeleton implements AWSCredentials {
+public class AmazonSESAppender extends AppenderSkeleton implements AWSCredentials, UnrecognizedElementHandler {
 
    private int bufferSize = 512;
    private CyclicBuffer cyclicBuffer = new CyclicBuffer(bufferSize);
@@ -122,6 +124,17 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
       }
    }
 
+   public boolean parseUnrecognizedElement(final Element element, final Properties props) throws Exception {
+      if("triggeringPolicy".equals(element.getNodeName())) {
+         Object triggerPolicy = org.apache.log4j.xml.DOMConfigurator.parseElement(element, props, TriggeringEventEvaluator.class);
+         if(triggerPolicy instanceof TriggeringEventEvaluator) {
+            setEvaluator((TriggeringEventEvaluator)triggerPolicy);
+         }
+         return true;
+      }
+      return false;
+   }
+
    InternetAddress getAddress(String addressStr) {
       try {
          return new InternetAddress(addressStr);
@@ -150,7 +163,6 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
       if(t != null) sbuf.append(t);
       int len = cyclicBuffer.length();
       for(int i = 0; i < len; i++) {
-         // sbuf.append(MimeUtility.encodeText(layout.format(cb.get())));
          LoggingEvent event = cyclicBuffer.get();
          sbuf.append(layout.format(event));
          if(layout.ignoresThrowable()) {
@@ -211,7 +223,6 @@ public class AmazonSESAppender extends AppenderSkeleton implements AWSCredential
          Multipart mp = new MimeMultipart();
          mp.addBodyPart(part);
          message.setContent(mp);
-
          message.setSentDate(new Date());
 
          if(!transport.isConnected()) {
